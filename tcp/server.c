@@ -1,21 +1,26 @@
+
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/socket.h>
-
-#define SERVER_PORT 5000
+#include <unistd.h>
+#define SERVER_PORT 5050
 
 void exit_sys(const char* msg);
 
-int main()
+int main(int argc, char** argv)
 {
+    if (argc != 2){
+        printf("usage server <port>\n");
+        exit(EXIT_FAILURE);
+    }
     int listen_sock, client_sock, rv;
     struct sockaddr_in server_sinaddr, client_sinaddr;
 
     //server side network configuration
     server_sinaddr.sin_family = AF_INET;
-    server_sinaddr.sin_port = htons(SERVER_PORT);
+    server_sinaddr.sin_port = htons((in_port_t)strtoul(argv[1], NULL, 10));
     server_sinaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     //listen_sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -40,6 +45,7 @@ int main()
 
     printf("Connected %s  : %u\n", inet_ntoa(client_sinaddr.sin_addr), ntohs((unsigned)client_sinaddr.sin_port));
 
+    close(client_sock);
     /*other side*/
     return 0;
 }
