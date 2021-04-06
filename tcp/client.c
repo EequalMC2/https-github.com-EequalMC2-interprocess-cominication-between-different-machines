@@ -1,14 +1,20 @@
 #include <arpa/inet.h>
+#include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/socket.h>
+#include <unistd.h>
 
-#define SERVER_PORT 5000
-#define SERVER_IP "127.0.0.1"
 void exit_sys(const char* msg);
 
-int main()
+int main(int argc, char** argv)
 {
+    if (argc != 3) {
+        printf("usage : client <ip> <port>\n");
+        exit(EXIT_FAILURE);
+    }
+
     int sock, server_sock, rv;
     struct sockaddr_in sinaddr;
 
@@ -17,19 +23,23 @@ int main()
         exit_sys("socket");
 
     sinaddr.sin_family = AF_INET;
-    sinaddr.sin_port = htons(SERVER_PORT);
+    sinaddr.sin_port = htons(strtol(argv[2], NULL, 10));
     //sinaddr.sin_addr.s_addr = htonl(127 << 24 | 0 << 16 | 0 << 8 | 1);
-    rv = inet_aton(SERVER_IP, &sinaddr.sin_addr);
-    if (rv == INADDR_NONE) {
-        /*DNS OPERATION*/
-        exit_sys("inet_aton");
+
+    rv = inet_aton(argv[1], &sinaddr.sin_addr);
+    if (rv == 0) {
+        struct hostent* hent;
+        hent = gethostbyname(argv[1]);
+        if (hent == NULL)   
+            exit_sys("gethostbyname");
+        memcpy(&sinaddr.sin_addr.s_addr, hent->h_addr_list[0], hent->h_length);
     }
 
     rv = connect(sock, (struct sockaddr*)&sinaddr, sizeof(sinaddr));
     if (rv == -1)
         exit_sys("connect");
 
-
+    close(sock);
 }
 
 void exit_sys(const char* msg)
