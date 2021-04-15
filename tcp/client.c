@@ -6,6 +6,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#define BUFFER_SIZE 1024
+
 void exit_sys(const char* msg);
 
 int main(int argc, char** argv)
@@ -30,7 +32,7 @@ int main(int argc, char** argv)
     if (rv == 0) {
         struct hostent* hent;
         hent = gethostbyname(argv[1]);
-        if (hent == NULL)   
+        if (hent == NULL)
             exit_sys("gethostbyname");
         memcpy(&sinaddr.sin_addr.s_addr, hent->h_addr_list[0], hent->h_length);
     }
@@ -38,6 +40,26 @@ int main(int argc, char** argv)
     rv = connect(sock, (struct sockaddr*)&sinaddr, sizeof(sinaddr));
     if (rv == -1)
         exit_sys("connect");
+
+    //send data to server
+    char buf[BUFFER_SIZE];
+    ssize_t response;
+    char* str;
+    for (;;) {
+        printf("please write someting :");
+        fgets(buf, BUFFER_SIZE, stdin);
+        if ((str = strchr(buf, '\n')) != NULL) {
+            *str = '\0';
+        }
+
+        response = send(sock, buf, strlen(buf), 0);
+        if (response == -1)
+            exit_sys("send");
+
+        if (!strcmp(buf, "exit")) { 
+            break;
+        }
+    }
 
     close(sock);
 }
