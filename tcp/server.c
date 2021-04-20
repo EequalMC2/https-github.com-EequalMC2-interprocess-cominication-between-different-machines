@@ -8,7 +8,9 @@
 #include <unistd.h>
 #define SERVER_PORT 5050
 #define BUFFER_SIZE 1024
+
 void exit_sys(const char* msg);
+char* rev_str(char* str);
 
 int main(int argc, char** argv)
 {
@@ -16,6 +18,7 @@ int main(int argc, char** argv)
         printf("usage server <port>\n");
         exit(EXIT_FAILURE);
     }
+
     int listen_sock, client_sock, rv;
     struct sockaddr_in server_sinaddr, client_sinaddr;
 
@@ -37,14 +40,15 @@ int main(int argc, char** argv)
     if (rv == -1)
         exit_sys("listen");
 
-    printf("waiting for connection....\n");
+    printf("Server started..\n");
 
     socklen_t client_sinaddr_len = sizeof(client_sinaddr);
     client_sock = accept(listen_sock, (struct sockaddr*)&client_sinaddr, &client_sinaddr_len);
     if (client_sock == -1)
         exit_sys("accept");
 
-    printf("Connected %s  : %u\n", inet_ntoa(client_sinaddr.sin_addr), ntohs((unsigned)client_sinaddr.sin_port));
+    //fprintf(stdout, "%s:%d connected  ", inet_ntoa(client_sinaddr.sin_addr),
+    //    ntohl(client_sinaddr.sin_port));
 
     //getting value from server side
     char buf[BUFFER_SIZE + 1] = { 0 };
@@ -53,20 +57,28 @@ int main(int argc, char** argv)
         response = recv(client_sock, buf, BUFFER_SIZE, 0);
         if (response == -1)
             exit_sys("recv");
-        //is client socket closed
-        else if (response == 0)
+
+        if (response == 0)
             break;
-        //writing null character
+
         buf[response] = '\0';
-        //if recive exit then finish conversation
         if (!strcmp(buf, "exit")) {
             printf("quit!\n");
             break;
         }
 
-        puts(buf);
+        printf("%s:%u : %s\n", inet_ntoa(client_sinaddr.sin_addr),
+            (unsigned)ntohs(client_sinaddr.sin_port), buf);
+        
+        rev_str(buf);
+
+        response = send(client_sock, buf, strlen(buf), 0);
+        if (response == -1)
+            exit_sys("send");
+        
     }
 
+    shutdown(client_sock, SHUT_RDWR);
     close(listen_sock);
     close(client_sock);
 
@@ -77,4 +89,18 @@ void exit_sys(const char* msg)
 {
     perror(msg);
     exit(EXIT_FAILURE);
+}
+
+char* rev_str(char* str)
+{
+    char temp;
+    int i, k;
+
+    for (i = 0, k = strlen(str) - 1; i < k; i++, k--) {
+        temp = str[i];
+        str[i] = str[k];
+        str[k] = temp;
+    }
+
+    return str;
 }
