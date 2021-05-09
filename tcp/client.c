@@ -4,19 +4,22 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <unistd.h>
+#include <unistd.h> 
 #define BUFFER_SIZE 1024
 
 void exit_sys(const char* msg);
 
 int main(int argc, char** argv)
 {
+    
+    int sock, server_sock, rv;
+    struct sockaddr_in sinaddr;
+    
     if (argc != 3) {
         printf("usage : client <ip> <port>\n");
         exit(EXIT_FAILURE);
     }
-    int sock, server_sock, rv;
-    struct sockaddr_in sinaddr;
+    
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock == -1)
         exit_sys("socket");
@@ -50,16 +53,16 @@ int main(int argc, char** argv)
 
         if (!strcmp(buf, "exit"))
             break;
-        
+
         response = recv(sock, buf, BUFFER_SIZE, 0);
-        if(response == -1)
+        if (response == -1)
             exit_sys("recv");
 
-        if(response == 0)
+        if (response == 0)
             break;
 
         buf[response];
-        printf("getting message : %s\n",buf);
+        printf("getting message : %s\n", buf);
     }
     shutdown(sock, SHUT_RDWR);
     close(sock);

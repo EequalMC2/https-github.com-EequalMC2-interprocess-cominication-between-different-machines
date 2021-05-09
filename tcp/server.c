@@ -1,11 +1,13 @@
-
+#define _XOPEN_SOURCE
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+
 #define SERVER_PORT 5050
 #define BUFFER_SIZE 1024
 
@@ -14,13 +16,22 @@ char* rev_str(char* str);
 
 int main(int argc, char** argv)
 {
+    struct sigaction act;
+
+    int listen_sock, client_sock, rv;
+    struct sockaddr_in server_sinaddr, client_sinaddr;
+
     if (argc != 2) {
         printf("usage server <port>\n");
         exit(EXIT_FAILURE);
     }
 
-    int listen_sock, client_sock, rv;
-    struct sockaddr_in server_sinaddr, client_sinaddr;
+    act.sa_handler = SIG_IGN;
+    sigemptyset(&act.sa_mask);
+    act.sa_flags = 0;
+
+    if (sigaction(SIGCHLD, &act, NULL) == -1)
+        exit(EXIT_FAILURE);
 
     //server side network configuration
     server_sinaddr.sin_family = AF_INET;
@@ -41,43 +52,50 @@ int main(int argc, char** argv)
         exit_sys("listen");
 
     printf("Server started..\n");
-
-    socklen_t client_sinaddr_len = sizeof(client_sinaddr);
-    client_sock = accept(listen_sock, (struct sockaddr*)&client_sinaddr, &client_sinaddr_len);
-    if (client_sock == -1)
-        exit_sys("accept");
-
-    //fprintf(stdout, "%s:%d connected  ", inet_ntoa(client_sinaddr.sin_addr),
-    //    ntohl(client_sinaddr.sin_port));
-
-    //getting value from server side
-    char buf[BUFFER_SIZE + 1] = { 0 };
-    ssize_t response;
     for (;;) {
-        response = recv(client_sock, buf, BUFFER_SIZE, 0);
-        if (response == -1)
-            exit_sys("recv");
 
-        if (response == 0)
-            break;
+        socklen_t client_sinaddr_len = sizeof(client_sinaddr);
+        client_sock = accept(listen_sock, (struct sockaddr*)&client_sinaddr, &client_sinaddr_len);
+        if (client_sock == -1)
+            exit_sys("accept");
 
-        buf[response] = '\0';
-        if (!strcmp(buf, "exit")) {
-            printf("quit!\n");
-            break;
+        //fprintf(stdout, "%s:%d connected  ", inet_ntoa(client_sinaddr.sin_addr),
+        //    ntohl(client_sinaddr.sin_port));
+        pid_t pid;
+        if ((pid = fork()) == -1) {
+            exit_sys("fork");
         }
 
-        printf("%s:%u : %s\n", inet_ntoa(client_sinaddr.sin_addr),
-            (unsigned)ntohs(client_sinaddr.sin_port), buf);
-        
-        rev_str(buf);
+        if (pid == 0) {
+            for (;;) {
+                //getting value from server side
+                char buf[BUFFER_SIZE + 1] = { 0 };
+                ssize_t response;
+                response = recv(client_sock, buf, BUFFER_SIZE, 0);
+                if (response == -1)
+                    exit_sys("recv");
 
-        response = send(client_sock, buf, strlen(buf), 0);
-        if (response == -1)
-            exit_sys("send");
-        
+                if (response == 0)
+                    break;
+
+                buf[response] = '\0';
+                if (!strcmp(buf, "exit")) {
+                    printf("exit!\n");
+                    break;
+                }
+
+                printf("%s:%u : %s\n", inet_ntoa(client_sinaddr.sin_addr),
+                    (unsigned)ntohs(client_sinaddr.sin_port), buf);
+
+                rev_str(buf);
+
+                response = send(client_sock, buf, strlen(buf), 0);
+                if (response == -1)
+                    exit_sys("send");
+            }
+        }
     }
-
+    
     shutdown(client_sock, SHUT_RDWR);
     close(listen_sock);
     close(client_sock);
