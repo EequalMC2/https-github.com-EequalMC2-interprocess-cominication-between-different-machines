@@ -1,26 +1,42 @@
-
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <stdio.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
-#include <sys/socket.h>
 #include <unistd.h>
+#include <stdlib.h>
+#include <pthread.h>
+
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+
 #define SERVER_PORT 5050
 #define BUFFER_SIZE 1024
 
+typedef struct tagCLIENT_INFO {
+    int sock;
+    struct sockaddr_in sinaddr;
+}CLIENT_INFO;
+
+
+
 void exit_sys(const char* msg);
 char* rev_str(char* str);
+void* client_proc(void* param);
 
 int main(int argc, char** argv)
 {
+    int listen_sock, client_sock, rv;
+    struct sockaddr_in server_sinaddr, client_sinaddr;
+    pthread_t tid;
+    int tresult;
+    CLIENT_INFO* cli; 
+
     if (argc != 2) {
         printf("usage server <port>\n");
         exit(EXIT_FAILURE);
     }
-
-    int listen_sock, client_sock, rv;
-    struct sockaddr_in server_sinaddr, client_sinaddr;
 
     //server side network configuration
     server_sinaddr.sin_family = AF_INET;
@@ -42,46 +58,28 @@ int main(int argc, char** argv)
 
     printf("Server started..\n");
 
-    socklen_t client_sinaddr_len = sizeof(client_sinaddr);
-    client_sock = accept(listen_sock, (struct sockaddr*)&client_sinaddr, &client_sinaddr_len);
-    if (client_sock == -1)
-        exit_sys("accept");
-
-    //fprintf(stdout, "%s:%d connected  ", inet_ntoa(client_sinaddr.sin_addr),
-    //    ntohl(client_sinaddr.sin_port));
-
-    //getting value from server side
-    char buf[BUFFER_SIZE + 1] = { 0 };
-    ssize_t response;
     for (;;) {
-        response = recv(client_sock, buf, BUFFER_SIZE, 0);
-        if (response == -1)
-            exit_sys("recv");
 
-        if (response == 0)
-            break;
+        socklen_t client_sinaddr_len = sizeof(client_sinaddr);
 
-        buf[response] = '\0';
-        if (!strcmp(buf, "exit")) {
-            printf("quit!\n");
-            break;
-        }
+        client_sock = accept(listen_sock, (struct sockaddr*)&client_sinaddr, &client_sinaddr_len);
+        if (client_sock == -1)
+            exit_sys("accept");
 
-        printf("%s:%u : %s\n", inet_ntoa(client_sinaddr.sin_addr),
-            (unsigned)ntohs(client_sinaddr.sin_port), buf);
+        cli = (CLIENT_INFO*) malloc(sizeof(CLIENT_INFO));
+        cli->sinaddr = client_sinaddr;
+        cli->sock = client_sock;
         
-        rev_str(buf);
+        tresult = pthread_create(&tid, NULL, client_proc, (void*)cli);
+        if (tresult != 0)
+            exit_sys("pthread_create");
 
-        response = send(client_sock, buf, strlen(buf), 0);
-        if (response == -1)
-            exit_sys("send");
-        
+        tresult = pthread_detach(tid);
+        if (tresult != 0)
+            exit_sys("pthread_detach");
     }
 
-    shutdown(client_sock, SHUT_RDWR);
     close(listen_sock);
-    close(client_sock);
-
     return 0;
 }
 
@@ -91,7 +89,7 @@ void exit_sys(const char* msg)
     exit(EXIT_FAILURE);
 }
 
-char* rev_str(char* str)
+char* revStr(char* str)
 {
     char temp;
     int i, k;
@@ -103,4 +101,31 @@ char* rev_str(char* str)
     }
 
     return str;
+}
+
+void* client_proc(void* param)
+{
+    ssize_t result;
+    CLIENT_INFO* cli = (CLIENT_INFO*) param;
+    char buf[256];
+    for (;;) {
+        result = recv(cli->sock, buf, BUFFER_SIZE, 0);
+        if (result == 0)
+            exit_sys("recv");
+      
+        buf[result] = '\0';
+        if (!strcmp(buf, "quit"))
+            break;
+      
+        printf("%s:%u %s\n",inet_ntoa(cli->sinaddr.sin_addr),  htons(cli->sinaddr.sin_port), buf);
+        
+        revStr(buf);
+        result = send(cli->sock, buf, strlen(buf), 0);
+        if (result == -1)
+            exit_sys("send");
+    }
+    free(cli);
+    shutdown(cli->sock, SHUT_RDWR);
+    close(cli->sock);
+    return NULL;
 }

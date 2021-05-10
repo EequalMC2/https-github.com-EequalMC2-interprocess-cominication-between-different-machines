@@ -11,12 +11,15 @@ void exit_sys(const char* msg);
 
 int main(int argc, char** argv)
 {
+
+    int sock, server_sock, rv;
+    struct sockaddr_in sinaddr;
+
     if (argc != 3) {
         printf("usage : client <ip> <port>\n");
         exit(EXIT_FAILURE);
     }
-    int sock, server_sock, rv;
-    struct sockaddr_in sinaddr;
+
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock == -1)
         exit_sys("socket");
